@@ -24,7 +24,7 @@ def main(args):
         for k in allele:
             if k in counts:
                 allele[k][3] = counts[k]
-    pik.dump(allele, args.out)
+    pik.dump(allele, open(args.out, 'wb'))
 
 
 if __name__ == "__main__":
