@@ -5,6 +5,7 @@ import math
 from collections import defaultdict
 import numpy as np
 import scipy as sp
+from scipy import stats
 import matplotlib.pyplot as plt
 
 
@@ -24,16 +25,19 @@ def main(args):
         for k in allele:
             fwt = wtcnt / total
             fmut = allele[k][3] / total
-            fitness = math.log(fmut / fwt, 2)
+            if fmut > 0:
+                fitness = math.log(fmut / fwt, 2)
+            else:
+                fitness = 0
             data[k][i] = fitness
 
     for k in data:
         # data[k] # numpy array of 3 values
         y = data[k][0], data[k][1], data[k][2]
         x = 0, 1.87, 3.82
-        slope, intercept, r_value, p_value, std_err = sp.stats.linregress(x,y)
-        data[k][4] = slope
-    slopes = np.array(k[4] for k in data)
+        slope, intercept, r_value, p_value, std_err = stats.linregress(x,y)
+        data[k][3] = slope
+    slopes = np.array(k[3] for k in data)
     plt.hist(slopes)
     plt.show()
 
@@ -42,4 +46,4 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser("Calculate fitness scores.")
     parser.add_argument("input", nargs=3)
-    sys.exit(parser.parse_args())
+    sys.exit(main(parser.parse_args()))
