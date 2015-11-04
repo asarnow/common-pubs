@@ -7,13 +7,13 @@ from Bio import Seq
 def main(args):
     if args.dbfile is None:
         args.dbfile = 'data/allele_dic_with_WT.pkl'
-    allele_library = pik.load(open(args.dbfile, 'rb'))
+    library = pik.load(open(args.dbfile, 'rb'))
     allele = {}
-    for k in allele_library:
+    for k in library:
         s = Seq.Seq(k, Seq.Alphabet.SingleLetterAlphabet()).reverse_complement()
-        pos = int(allele[k][0])
+        pos = int(library[k][0])
         if pos != 0:
-            cod = Seq.Seq(int(allele[k][1]), Seq.Alphabet.SingleLetterAlphabet())
+            cod = Seq.Seq(int(library[k][1]), Seq.Alphabet.SingleLetterAlphabet())
             aa = cod.transcribe().translate()
             allele[s] = [pos, cod, aa, 0]
         else:
