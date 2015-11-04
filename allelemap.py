@@ -13,7 +13,7 @@ def main(args):
         s = Seq.Seq(k, Seq.Alphabet.SingleLetterAlphabet()).reverse_complement()
         pos = int(library[k][0])
         if pos != 0:
-            cod = Seq.Seq(int(library[k][1]), Seq.Alphabet.SingleLetterAlphabet())
+            cod = Seq.Seq(library[k][1], Seq.Alphabet.SingleLetterAlphabet())
             aa = cod.transcribe().translate()
             allele[s] = [pos, cod, aa, 0]
         else:
