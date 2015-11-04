@@ -15,7 +15,7 @@ def main(args):
         if pos != 0:
             cod = Seq.Seq(library[k][1], Seq.Alphabet.SingleLetterAlphabet())
             aa = cod.transcribe().translate()
-            allele[s] = [pos, str(cod), aa, 0]
+            allele[s] = [pos, str(cod), str(aa), 0]
         else:
             allele[s] = [pos, None, None, 0]
 
