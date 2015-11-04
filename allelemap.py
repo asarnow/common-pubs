@@ -21,9 +21,9 @@ def main(args):
 
     for fname in args.files:
         counts = pik.load(open(fname, 'rb'))
-        for k in allele:
-            if k in counts:
-                allele[k][3] = counts[k]
+        for k in counts:
+            if k[0:18] in allele:
+                allele[k[0:18]][3] = counts[k]
     pik.dump(allele, open(args.out, 'wb'))
 
 
