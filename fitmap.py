@@ -26,8 +26,8 @@ def process_fastq_files(args):
     store = pytables.HDFStore(args.out)
     metadata = parse_library(args.dbfile)
     store['metadata'] = metadata
-    # pool = Pool(processes=args.numproc)
-    result = map(functools.partial(process_fastq, prepop=metadata.index), args.files)
+    pool = Pool(processes=args.numproc)
+    result = pool.map(functools.partial(process_fastq, prepop=metadata.index), args.files)
     allele_temp = {file2col(f): r[0] for f, r in zip(args.files, result)}
     other_temp = {file2col(f): r[1] for f, r in zip(args.files, result)}
     allele_counts = pd.DataFrame.from_dict(allele_temp, orient="columns")
