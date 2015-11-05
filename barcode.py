@@ -17,10 +17,12 @@ def main(args):
             s = record.seq.reverse_complement()[::-1]
             q = record.letter_annotations['phred_quality']
             bcount[s[0:18]] += 1
-    seqDictCorrected = defaultdict(int)
-    for b in barcodes:
-        hamming_bnb_search(b, bcount, seqDictCorrected, args.maxdist)
-    print bcount.values()
+    if args.maxdist == 0:
+        seqDictCorrected = defaultdict(int)
+    elif args.maxdist > 0:
+        seqDictCorrected = defaultdict(int)
+        for b in barcodes:
+            hamming_bnb_search(b, bcount, seqDictCorrected, args.maxdist)
     return 0
 
 
@@ -43,7 +45,7 @@ def hamming_bnb_search(barcode, seqDict, seqDictCorrected, maxdist):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description="Barcode analysis.")
-    parser.add_argument("-m", "--maxdist", action="store", type=int, default=4,
+    parser.add_argument("-m", "--maxdist", action="store", type=int, default=0,
                         metavar="MAXDIST", dest="maxdist", help="Maximum Hamming distance for barcode match.")
     parser.add_argument("-b", "--barcode", action="store", type=str,
                         metavar="BARCODES", dest="bcfile", help="Path to barcode file.")

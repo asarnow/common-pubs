@@ -35,7 +35,7 @@ def main(args):
         # data[k] # numpy array of 3 values
         y = data[k][0], data[k][1], data[k][2]
         x = 0, 1.87, 3.82
-        slope, intercept, r_value, p_value, std_err = stats.linregress(x,y)
+        slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
         data[k][3] = slope
     slopes = np.array([data[k][3] for k in data])
     plt.hist(slopes, 25)
