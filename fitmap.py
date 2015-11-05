@@ -19,6 +19,8 @@ from pandas.io import pytables
 def main(args):
     if ".fastq" in args.files[0]:
         process_fastq_files(args)
+    if ".hf5" in args.files[0]:
+        store = pytables.HDFStore(args.files[0])
     return 0
 
 
@@ -30,8 +32,8 @@ def process_fastq_files(args):
     result = pool.map(functools.partial(process_fastq, prepop=metadata.index), args.files)
     allele_temp = {file2col(f): r[0] for f, r in zip(args.files, result)}
     other_temp = {file2col(f): r[1] for f, r in zip(args.files, result)}
-    allele_counts = pd.DataFrame.from_dict(allele_temp, orient="columns")
-    other_counts = pd.DataFrame.from_dict(other_temp, orient="columns")
+    allele_counts = pd.DataFrame.from_dict(allele_temp, orient="columns").index.rename('Seq')
+    other_counts = pd.DataFrame.from_dict(other_temp, orient="columns").index.rename('Seq')
     store['allele_counts'] = allele_counts
     store['other_counts'] = other_counts
     store.close()
