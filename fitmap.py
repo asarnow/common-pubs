@@ -1,6 +1,7 @@
 #!/usr/bin/env python2.7
 import sys
 import os
+import os.path
 import gzip
 from collections import defaultdict
 import cPickle as pik
@@ -24,13 +25,13 @@ def process_fastq(args):
     metadata = parse_library(args.dbfile)
     store['metadata'] = metadata
 
-    cols = [fn.replace('.fastq', '').replace('.gz', '') for fn in args.files]
+    cols = [os.path.basename(fn).replace('.fastq', '').replace('.gz', '') for fn in args.files]
 
     allele_counts = pd.DataFrame(data=0, columns=cols, index=metadata.index)
     other_counts = pd.DataFrame(data=None, columns=cols)
 
     for fastq in args.files:
-        col = fastq.replace('.fastq', '').replace('.gz', '')
+        col = os.path.basename(fastq).replace('.fastq', '').replace('.gz', '')
         others = defaultdict(int)
         parse_file(fastq, allele_counts[col], others)
         others = pd.Series(others)
