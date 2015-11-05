@@ -26,7 +26,7 @@ def process_fastq(args):
 
     cols = [fn.replace('.fastq', '').replace('.gz', '') for fn in args.files]
 
-    allele_counts = pd.DataFrame(data=None, columns=cols, index=metadata.index)
+    allele_counts = pd.DataFrame(data=0, columns=cols, index=metadata.index)
     other_counts = pd.DataFrame(data=None, columns=cols)
 
     for fastq in args.files:
@@ -35,7 +35,7 @@ def process_fastq(args):
         parse_file(fastq, allele_counts[col], others)
         others = pd.Series(others)
         for i in others.index:
-            other_counts.loc[i] = np.nan
+            other_counts.loc[i] = 0
             other_counts[col][i] = others[i]
     store['allele_counts'] = allele_counts
     store['other_counts'] = other_counts
