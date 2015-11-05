@@ -4,6 +4,8 @@ import os
 import os.path
 import gzip
 from collections import defaultdict
+from multiprocessing import Pool
+import functools
 import cPickle as pik
 from Bio import Seq
 from Bio import SeqIO
@@ -15,29 +17,21 @@ from pandas.io import pytables
 
 
 def main(args):
-    if args.parse:
-        process_fastq(args)
+    if ".fastq" in args.files[0]:
+        process_fastq_files(args)
     return 0
 
 
-def process_fastq(args):
+def process_fastq_files(args):
     store = pytables.HDFStore(args.out)
     metadata = parse_library(args.dbfile)
     store['metadata'] = metadata
-
-    cols = [os.path.basename(fn).replace('.fastq', '').replace('.gz', '') for fn in args.files]
-
-    allele_counts = pd.DataFrame(data=0, columns=cols, index=metadata.index)
-    other_counts = pd.DataFrame(data=None, columns=cols)
-
-    for fastq in args.files:
-        col = os.path.basename(fastq).replace('.fastq', '').replace('.gz', '')
-        others = defaultdict(int)
-        parse_file(fastq, allele_counts[col], others)
-        others = pd.Series(others)
-        for i in others.index:
-            other_counts.loc[i] = 0
-            other_counts[col][i] = others[i]
+    # pool = Pool(processes=args.numproc)
+    result = map(functools.partial(process_fastq, prepop=metadata.index), args.files)
+    allele_temp = {file2col(f): r[0] for f, r in zip(args.files, result)}
+    other_temp = {file2col(f): r[1] for f, r in zip(args.files, result)}
+    allele_counts = pd.DataFrame.from_dict(allele_temp, orient="columns")
+    other_counts = pd.DataFrame.from_dict(other_temp, orient="columns")
     store['allele_counts'] = allele_counts
     store['other_counts'] = other_counts
     store.close()
@@ -60,6 +54,17 @@ def parse_library(dbfile):
     return metadata
 
 
+def file2col(x):
+    return os.path.basename(x).replace('.fastq', '').replace('.gz', '')
+
+
+def process_fastq(fastq, prepop):
+    alleles = {k: 0 for k in prepop}
+    others = defaultdict(int)
+    parse_file(fastq, alleles, others)
+    return alleles, dict(others)
+
+
 def parse_file(fastq, counts, others):
     if fastq.endswith('.gz'):
         f = gzip.open(fastq, 'rb')
@@ -80,8 +85,8 @@ def parse_file(fastq, counts, others):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser("Map read sequences to known barcodes.")
-    parser.add_argument("-p", "--parse", action="store_true", dest="parse",
-                        help="Process FASTQ files")
+    parser.add_argument("-p", "--processes", action="store", type=int, default=1,
+                        dest="numproc", help="Number of parallel processes.")
     parser.add_argument("-d", "--database", action="store", type=str,
                         default=None, dest="dbfile", help="Barcode definitions or HDF5 file.")
     parser.add_argument("-o", "--output", action="store", type=str,
