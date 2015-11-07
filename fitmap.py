@@ -21,7 +21,6 @@ def main(args):
         process_fastq_files(args)
     if ".hf5" in args.files[0]:
         data = pytables.HDFStore(args.files[0])
-
         ac = data['allele_counts']
         oc = data['other_counts']
         meta = data['metadata']
