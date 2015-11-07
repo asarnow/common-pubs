@@ -28,15 +28,21 @@ def main(args):
         wt = ac[meta['Pos'] == 0]
         vswt = np.log2(ac / np.sum(wt))
         r1 = ['R1T0', 'R1T1', 'R1T2']
-        fitness = pd.DataFrame(data=None, index=vswt.index, columns=['slope', 'intercept', 'r', 'p', 'stderr'])
-        for i in vswt.index:
-            fitness.loc[i] = stats.linregress(x=np.array([0, 1.87, 3.82]), y=vswt.loc[i][r1])
+        pool = Pool(processes=args.numproc)
+        result = pool.map(linregress_wrapper, vswt[r1].values)
+        fitness = pd.DataFrame(data=result, index=vswt.index, columns=['slope', 'intercept', 'r', 'p', 'stderr'])
+        pool.close()
         if len(args.files) == 2:
             output = pytables.HDFStore(args.files[1])
             output['fitness_r1'] = fitness
             output.close()
         data.close()
     return 0
+
+
+def linregress_wrapper(y):
+    slope, intercept, rval, pval, err = stats.linregress(x=np.array([0, 1.87, 3.82]), y=y)
+    return slope, intercept, rval, pval, err
 
 
 def process_fastq_files(args):
