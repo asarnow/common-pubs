@@ -20,7 +20,22 @@ def main(args):
     if ".fastq" in args.files[0]:
         process_fastq_files(args)
     if ".hf5" in args.files[0]:
-        store = pytables.HDFStore(args.files[0])
+        data = pytables.HDFStore(args.files[0])
+
+        ac = data['allele_counts']
+        oc = data['other_counts']
+        meta = data['metadata']
+        wt = ac[meta['Pos'] == 0]
+        vswt = np.log2(ac / np.sum(wt))
+        r1 = ['R1T0', 'R1T1', 'R1T2']
+        fitness = pd.DataFrame(data=None, index=vswt.index, columns=['slope', 'intercept', 'r', 'p', 'stderr'])
+        for i in vswt.index:
+            fitness.loc[i] = stats.linregress(x=np.array([0, 1.87, 3.82]), y=vswt.loc[i][r1])
+        if len(args.files) == 2:
+            output = pytables.HDFStore(args.files[1])
+            output['fitness_r1'] = fitness
+            output.close()
+        data.close()
     return 0
 
 
@@ -30,6 +45,7 @@ def process_fastq_files(args):
     store['metadata'] = metadata
     pool = Pool(processes=args.numproc)
     result = pool.map(functools.partial(process_fastq, prepop=metadata.index), args.files)
+    pool.close()
     allele_temp = {file2col(f): r[0] for f, r in zip(args.files, result)}
     other_temp = {file2col(f): r[1] for f, r in zip(args.files, result)}
     allele_counts = pd.DataFrame.from_dict(allele_temp, orient="columns")
