@@ -25,16 +25,33 @@ def main(args):
     if args.counts:
         print "Not implemented, my bad."
         return 1
+    if len(args.files) < 1 or len(args.files) > 2:
+        print "Usage: fitmap.py <input> <output_dir>."
+        return 1
+    if args.dbfile is None:
+        print "Must specify allele dictionary!"
+        return 1
 
     meta = parse_library(args.dbfile)
     idx = meta.reset_index().set_index(['Pos', 'AA', 'Codon'])
+
     data = pik.load(open(args.files[0], 'rb'))
-    df = pd.DataFrame.from_dict(data, orient="columns")
+    if type(data) is dict:
+        df = pd.DataFrame.from_dict(data, orient="columns")
+    elif type(data) is pd.DataFrame:
+        df = data
+    else:
+        print "Input data must be dict of dict or DataFrame!"
+        return 1
+
     df.index.rename('Seq', inplace=True)
     aa = list(set(meta['AA']) - {None, np.nan})
+    cod = list(set(meta['Codon']) - {None, np.nan})
     pos = list(set(meta['Pos']) - {None, np.nan, 0})
-    aamap = compute_hmap(df[args.scores], aa, pos, 'Pos', 'AA', idx, np.nanmedian)
-    draw_hmap(aamap, meta, os.path.join(args.files, 'aamap.png'))
+    aamap = compute_hmap(df[args.score], pos, aa, 'Pos', 'AA', idx, np.nanmedian)
+    codmap = compute_hmap(df[args.score], pos, cod, 'Pos', 'Codon', idx, np.nanmedian)
+    draw_hmap(aamap, meta, os.path.join(args.files[1], 'aamap.png'))
+    draw_hmap(codmap, meta, os.path.join(args.files[1], 'codonmap.png'))
     return 0
 
 
@@ -88,7 +105,7 @@ if __name__ == "__main__":
                         default=None, dest="dbfile", help="Barcode definitions (allele dictionary).")
     parser.add_argument("-c", "--counts", action="store_true", dest="counts", default=False,
                         help="Input data contains sequence counts.")
-    parser.add_argument("-s", "--score", action="store", dest="scores", type=str, default='slope',
+    parser.add_argument("-s", "--score", action="store", dest="score", type=str, default='slope',
                         metavar="SCORE", help="Fitness score label (e.g. 'slope').")
-    parser.add_argument("files", nargs=1)
+    parser.add_argument("files", nargs="+")
     sys.exit(main(parser.parse_args()))
