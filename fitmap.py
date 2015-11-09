@@ -11,6 +11,8 @@ from Bio import Seq
 from Bio import SeqIO
 import numpy as np
 import scipy as sp
+import matplotlib.pyplot as plt
+import seaborn
 from scipy import stats
 import pandas as pd
 from pandas.io import pytables
@@ -36,7 +38,69 @@ def main(args):
             output['fitness_r1'] = fitness
             output.close()
         data.close()
+        if args.c:
+            draw_hist(fitness)
+        if args.m:
+            idx = meta.reset_index().set_index(['Pos', 'AA', 'Codon'])
+            aamap = compute_map(fitness, meta, idx, 'AA')
+            codmap = compute_map(fitness, meta, idx, 'Codon')
+            draw_maps(aamap, codmap, meta)
     return 0
+
+
+def draw_hist(fitness):
+    # cnt, bns = np.histogram(fitness['slope'], bins=20, normed=True)
+    fig = plt.figure()
+    # plt.bar(bns, cnt)
+    plt.hist(fitness['slope'][np.isfinite(fitness['slope'])], bins=50, normed=True)
+    fig.set_facecolor('white')
+    ax = plt.gca()
+    ax.set_xlabel('Fitness Score')
+    ax.set_ylabel('Frequency')
+    plt.savefig('fitnesshisto.png')
+    # plt.show()
+
+
+def draw_maps(aamap, codmap, meta):
+    fig = plt.figure()
+    plt.pcolor(aamap, cmap='RdBu')
+    plt.xlim(0, aamap.shape[1])
+    plt.ylim(0, aamap.shape[0])
+    ax = plt.gca()
+    fig.set_facecolor('white')
+    ax.set_yticks([x+0.6 for x in xrange(0, aamap.shape[0])])
+    aa = list(set(meta['AA']) - {None, np.nan})
+    ax.set_yticklabels(aa)
+    ax.set_ylabel('Residue')
+    ax.set_xlabel('Ub Sequence Position')
+    cb = plt.colorbar()
+    cb.set_label('Relative Fitness')
+    plt.savefig('aamap.png', bbox_inches='tight')
+
+    fig = plt.figure()
+    plt.pcolor(codmap, cmap='RdBu')
+    plt.xlim(0, codmap.shape[1])
+    plt.ylim(0, codmap.shape[0])
+    ax = plt.gca()
+    fig.set_facecolor('white')
+    ax.set_yticks([x+0.6 for x in xrange(0, codmap.shape[0])])
+    cod = list(set(meta['Codon']) - {None, np.nan})
+    ax.set_yticklabels(cod)
+    ax.set_ylabel('Codon')
+    ax.set_xlabel('Ub Sequence Position')
+    cb = plt.colorbar()
+    cb.set_label('Relative Fitness')
+    plt.savefig('codmap.png', bbox_inches='tight')
+
+
+def compute_map(fitness, meta, idx, col, avgfun=np.nanmean):
+    aa = list(set(meta[col]) - {None, np.nan})
+    pos = list(set(meta['Pos']) - {None, np.nan, 0})
+    aamap = np.zeros((len(aa), len(pos)))
+    for i in xrange(0, len(aa)):
+        for p in xrange(0, len(pos)):
+            aamap[i, p] = avgfun(fitness.loc[idx.xs([pos[p], aa[i]], level=['Pos', col])['Seq']]['slope'])
+    return aamap
 
 
 def linregress_wrapper(y):
@@ -114,6 +178,10 @@ if __name__ == "__main__":
                         dest="numproc", help="Number of parallel processes.")
     parser.add_argument("-d", "--database", action="store", type=str,
                         default=None, dest="dbfile", help="Barcode definitions or HDF5 file.")
+    parser.add_argument("-m", "--map", action="store_true", dest="m", default=False,
+                        help="Compute and display fitness heatmaps.")
+    parser.add_argument("-c", "--counts", action="store_true", dest="c", default=False,
+                        help="Compute and display fitness histogram.")
     parser.add_argument("-o", "--output", action="store", type=str,
                         dest="out", help="Output Pickle with barcode definitions and frequencies.")
     parser.add_argument("files", nargs='+')
