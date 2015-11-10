@@ -26,7 +26,7 @@ if pkgutil.find_loader('seaborn'):
 def main(args):
     if len(args.files) > 0:  # Data files passed on command line.
         if len(args.files) > 1:  # Demultiplexed data files.
-            meta, ac, oc = process_fastq_files(args)
+            ac, oc, meta = process_fastq_files(args)
             expdefs = { None: [(file2col(f),) for f in args.files]}  # Use file names.
         else:  # Single multiplexed data file.
             if args.expdefs is None:
@@ -34,7 +34,7 @@ def main(args):
                 return 1
             with open(args.expdefs, 'rb') as f:
                 expdefs = pik.load(f)
-            meta, ac, oc = process_fastq_files(args, [v[0] for v in [expdefs[k] for k in expdefs]])
+            ac, oc, meta = process_fastq_files(args, [v[0] for v in [expdefs[k] for k in expdefs]])
         if args.cache is not None:  # Use cache to store parsed data.
             store = pytables.HDFStore(args.cache)
             store['metadata'] = meta
