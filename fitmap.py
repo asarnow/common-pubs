@@ -180,7 +180,7 @@ def process_fastq_files(args, indices=None):
 
 def process_fastq_file(args, indices, barcodes):
     alleles = {i: {k: 0 for k in barcodes} for i in indices}
-    others = {i: defaultdict(int) for i in indices}
+    others = defaultdict(defaultdict(int))
     parse_fastq_file(args.files[0], alleles, others)
     return alleles, others
 
