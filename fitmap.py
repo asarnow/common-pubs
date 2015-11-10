@@ -121,8 +121,8 @@ def compute_hmap(fitness, xvals, yvals, xcol, ycol, idx, avgfuns=[np.nanmean]):
     return maps
 
 
-def linregress_wrapper(y):
-    slope, intercept, rval, pval, err = stats.linregress(x=np.array([0, 1.87, 3.82]), y=y)
+def linregress_wrapper(y, x=np.array([0, 1.87, 3.82])):
+    slope, intercept, rval, pval, err = stats.linregress(x=x, y=y)
     return slope, intercept, rval, pval, err
 
 
