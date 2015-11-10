@@ -12,10 +12,15 @@ from Bio import SeqIO
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
-import seaborn
 from scipy import stats
 import pandas as pd
 from pandas.io import pytables
+import pkgutil
+import importlib
+
+
+if pkgutil.find_loader('seaborn'):
+    importlib.import_module('seaborn')
 
 
 def main(args):
@@ -74,7 +79,7 @@ def main(args):
         codmaps = compute_hmap(fitness['slope'], pos, cod, 'Pos', 'Codon', idx, [np.nanmedian, np.nanstd])
         draw_hmap(aamaps[0], aa, os.path.join(args.out, 'fitmap_aa_median.png'))
         draw_hmap(codmaps[0], cod, os.path.join(args.out, 'fitmap_cod_median.png'))
-        
+
     return 0
 
 
