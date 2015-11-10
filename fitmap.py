@@ -19,36 +19,68 @@ from pandas.io import pytables
 
 
 def main(args):
-    if ".fastq" in args.files[0]:
-        process_fastq_files(args)
-    if ".hf5" in args.files[0]:
-        data = pytables.HDFStore(args.files[0])
-        ac = data['allele_counts']
-        oc = data['other_counts']
-        meta = data['metadata']
-        wt = ac[meta['Pos'] == 0]
-        vswt = np.log2(ac / np.sum(wt))
-        r1 = ['R1T0', 'R1T1', 'R1T2']
+    if args.out is None:
+        args.out = "."
+    if len(args.files) > 0 and ".fastq" in args.files[0]:
+        if len(args.files) > 1:
+            meta, ac, oc = process_fastq_files(args)
+            expdefs = { None: [(file2col(f),) for f in args.files]}
+        else:
+            if args.expdefs is None:
+                print "Experiment definitions required."
+                return 1
+            with open(args.expdefs, 'rb') as f:
+                expdefs = pik.load(f)
+            meta, ac, oc = process_fastq_files(args, [v[0] for v in [expdefs[k] for k in expdefs]])
+        if args.cache is not None:
+            store = pytables.HDFStore(args.out)
+            store['metadata'] = meta
+            store['allele_counts'] = ac
+            store['other_counts'] = oc
+            store.close()
+    elif args.cache is not None:
+        if args.expdefs is None:
+            print "Experiment definitions required."
+            return 1
+        with open(args.expdefs, 'rb') as f:
+            expdefs = pik.load(f)
+        cache = pytables.HDFStore(args.cache)
+        ac = cache['allele_counts']
+        oc = cache['other_counts']
+        meta = cache['metadata']
+        cache.close()
+    else:
+        print "Specify at least one data source."
+        return 1
+
+    wt = ac[meta['Pos'] == 0]
+    vswt = np.log2(ac / np.sum(wt))
+
+    for k in expdefs:
+        cols = [t[0] for t in expdefs[k]]
         pool = Pool(processes=args.numproc)
-        result = pool.map(linregress_wrapper, vswt[r1].values)
+        result = pool.map(linregress_wrapper, vswt[cols].values)
         fitness = pd.DataFrame(data=result, index=vswt.index, columns=['slope', 'intercept', 'r', 'p', 'stderr'])
         pool.close()
-        if len(args.files) == 2:
-            output = pytables.HDFStore(args.files[1])
-            output['fitness_r1'] = fitness
-            output.close()
-        data.close()
-        if args.c:
-            draw_hist(fitness)
-        if args.m:
-            idx = meta.reset_index().set_index(['Pos', 'AA', 'Codon'])
-            aamap = compute_map(fitness, meta, idx, 'AA')
-            codmap = compute_map(fitness, meta, idx, 'Codon')
-            draw_maps(aamap, codmap, meta)
+
+    if args.cache is not None:
+        cache = pytables.HDFStore(args.cache)
+        cache['fitness'] = fitness
+        cache.close()
+
+    draw_hist(fitness, os.path.join(args.out, 'fitmap_hist.png'))
+    idx = meta.reset_index().set_index(['Pos', 'AA', 'Codon'])
+    aa = list(set(meta['AA']) - {None, np.nan})
+    cod = list(set(meta['Codon']) - {None, np.nan})
+    pos = list(set(meta['Pos']) - {None, np.nan, 0})
+    aamaps = compute_hmap(fitness['slope'], pos, aa, 'Pos', 'AA', idx, [np.nanmedian, np.nanstd])
+    codmaps = compute_hmap(fitness['slope'], pos, cod, 'Pos', 'Codon', idx, [np.nanmedian, np.nanstd])
+    draw_hmap(aamaps[0], aa, os.path.join(args.out, 'fitmap_aa.png'))
+    draw_hmap(codmaps[0], cod, os.path.join(args.out, 'fitmap_cod.png'))
     return 0
 
 
-def draw_hist(fitness):
+def draw_hist(fitness, fname):
     # cnt, bns = np.histogram(fitness['slope'], bins=20, normed=True)
     fig = plt.figure()
     # plt.bar(bns, cnt)
@@ -57,73 +89,38 @@ def draw_hist(fitness):
     ax = plt.gca()
     ax.set_xlabel('Fitness Score')
     ax.set_ylabel('Frequency')
-    plt.savefig('fitnesshisto.png')
+    plt.savefig(fname)
     # plt.show()
 
 
-def draw_maps(aamap, codmap, meta):
+def draw_hmap(hmap, yvals, fname):
     fig = plt.figure()
-    plt.pcolor(aamap, cmap='RdBu')
-    plt.xlim(0, aamap.shape[1])
-    plt.ylim(0, aamap.shape[0])
+    plt.pcolor(hmap, cmap='RdBu')
+    plt.xlim(0, hmap.shape[1])
+    plt.ylim(0, hmap.shape[0])
     ax = plt.gca()
     fig.set_facecolor('white')
-    ax.set_yticks([x+0.6 for x in xrange(0, aamap.shape[0])])
-    aa = list(set(meta['AA']) - {None, np.nan})
-    ax.set_yticklabels(aa)
+    ax.set_yticks([x+0.6 for x in xrange(0, hmap.shape[0])])
+    ax.set_yticklabels(yvals)
     ax.set_ylabel('Residue')
     ax.set_xlabel('Ub Sequence Position')
     cb = plt.colorbar()
     cb.set_label('Relative Fitness')
-    plt.savefig('aamap.png', bbox_inches='tight')
-
-    fig = plt.figure()
-    plt.pcolor(codmap, cmap='RdBu')
-    plt.xlim(0, codmap.shape[1])
-    plt.ylim(0, codmap.shape[0])
-    ax = plt.gca()
-    fig.set_facecolor('white')
-    ax.set_yticks([x+0.6 for x in xrange(0, codmap.shape[0])])
-    cod = list(set(meta['Codon']) - {None, np.nan})
-    ax.set_yticklabels(cod)
-    ax.set_ylabel('Codon')
-    ax.set_xlabel('Ub Sequence Position')
-    cb = plt.colorbar()
-    cb.set_label('Relative Fitness')
-    plt.savefig('codmap.png', bbox_inches='tight')
+    plt.savefig(fname, bbox_inches='tight')
 
 
-def compute_map(fitness, meta, idx, col, avgfun=np.nanmean):
-    aa = list(set(meta[col]) - {None, np.nan})
-    pos = list(set(meta['Pos']) - {None, np.nan, 0})
-    aamap = np.zeros((len(aa), len(pos)))
-    for i in xrange(0, len(aa)):
-        for p in xrange(0, len(pos)):
-            aamap[i, p] = avgfun(fitness.loc[idx.xs([pos[p], aa[i]], level=['Pos', col])['Seq']]['slope'])
-    return aamap
+def compute_hmap(fitness, xvals, yvals, xcol, ycol, idx, avgfuns=[np.nanmean]):
+    maps = [np.zeros((len(yvals), len(xvals))) for f in avgfuns]
+    for i in xrange(0, len(yvals)):
+        for p in xrange(0, len(xvals)):
+            for m, f in zip(maps, avgfuns):
+                m[i, p] = f(fitness.loc[idx.xs([xvals[p], yvals[i]], level=[xcol, ycol])['Seq']])
+    return maps
 
 
 def linregress_wrapper(y):
     slope, intercept, rval, pval, err = stats.linregress(x=np.array([0, 1.87, 3.82]), y=y)
     return slope, intercept, rval, pval, err
-
-
-def process_fastq_files(args):
-    store = pytables.HDFStore(args.out)
-    metadata = parse_library(args.dbfile)
-    store['metadata'] = metadata
-    pool = Pool(processes=args.numproc)
-    result = pool.map(functools.partial(process_fastq, prepop=metadata.index), args.files)
-    pool.close()
-    allele_temp = {file2col(f): r[0] for f, r in zip(args.files, result)}
-    other_temp = {file2col(f): r[1] for f, r in zip(args.files, result)}
-    allele_counts = pd.DataFrame.from_dict(allele_temp, orient="columns")
-    other_counts = pd.DataFrame.from_dict(other_temp, orient="columns")
-    allele_counts.index.rename('Seq', inplace=True)
-    other_counts.index.rename('Seq', inplace=True)
-    store['allele_counts'] = allele_counts
-    store['other_counts'] = other_counts
-    store.close()
 
 
 def parse_library(dbfile):
@@ -143,18 +140,27 @@ def parse_library(dbfile):
     return metadata
 
 
-def file2col(x):
-    return os.path.basename(x).replace('.fastq', '').replace('.gz', '')
+def process_fastq_files(args, indices=None):
+    metadata = parse_library(args.dbfile)
+    if len(args.files) > 1:
+        allele_temp, other_temp = process_split_fastq_files(args, metadata)
+    else:
+        allele_temp, other_temp = process_fastq_file(args, indices, metadata.index)
+    allele_counts = pd.DataFrame.from_dict(allele_temp, orient="columns")
+    other_counts = pd.DataFrame.from_dict(other_temp, orient="columns")
+    allele_counts.index.rename('Seq', inplace=True)
+    other_counts.index.rename('Seq', inplace=True)
+    return allele_counts, other_counts, metadata
 
 
-def process_fastq(fastq, prepop):
-    alleles = {k: 0 for k in prepop}
-    others = defaultdict(int)
-    parse_file(fastq, alleles, others)
-    return alleles, dict(others)
+def process_fastq_file(args, indices, barcodes):
+    alleles = {i: {k: 0 for k in barcodes} for i in indices}
+    others = {i: defaultdict(int) for i in indices}
+    parse_fastq_file(args.files[0], alleles, others)
+    return alleles, others
 
 
-def parse_file(fastq, counts, others):
+def parse_fastq_file(fastq, counts, others):
     if fastq.endswith('.gz'):
         f = gzip.open(fastq, 'rb')
     else:
@@ -171,18 +177,55 @@ def parse_file(fastq, counts, others):
     f.close()
 
 
+def process_split_fastq_files(args, metadata):
+    pool = Pool(processes=args.numproc)
+    result = pool.map(functools.partial(process_split_fastq, prepop=metadata.index), args.files)
+    pool.close()
+    allele_temp = {file2col(f): r[0] for f, r in zip(args.files, result)}
+    other_temp = {file2col(f): r[1] for f, r in zip(args.files, result)}
+    return allele_temp, other_temp
+
+
+def process_split_fastq(fastq, prepop):
+    alleles = {k: 0 for k in prepop}
+    others = defaultdict(int)
+    parse_split_fastq(fastq, alleles, others)
+    return alleles, dict(others)
+
+
+def parse_split_fastq(fastq, counts, others):
+    if fastq.endswith('.gz'):
+        f = gzip.open(fastq, 'rb')
+    else:
+        f = open(fastq, 'rU')
+    records = SeqIO.parse(f, 'fastq', Seq.Alphabet.DNAAlphabet())
+    for r in records:
+        putative = str(r.seq[0:18])
+        if putative in counts:
+            counts[putative] += 1
+            # r.letter_annotations['phred_quality']
+        else:
+            others[putative] += 1
+            # r.letter_annotations['phred_quality']
+    f.close()
+
+
+def file2col(x):
+    return os.path.basename(x).replace('.fastq', '').replace('.gz', '')
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser("Map read sequences to known barcodes.")
     parser.add_argument("-p", "--processes", action="store", type=int, default=1,
                         dest="numproc", help="Number of parallel processes.")
     parser.add_argument("-d", "--database", action="store", type=str,
-                        default=None, dest="dbfile", help="Barcode definitions or HDF5 file.")
-    parser.add_argument("-m", "--map", action="store_true", dest="m", default=False,
-                        help="Compute and display fitness heatmaps.")
-    parser.add_argument("-c", "--counts", action="store_true", dest="c", default=False,
-                        help="Compute and display fitness histogram.")
-    parser.add_argument("-o", "--output", action="store", type=str,
-                        dest="out", help="Output Pickle with barcode definitions and frequencies.")
-    parser.add_argument("files", nargs='+')
+                        default=None, dest="dbfile", help="Barcode definitions (allele dictionary).")
+    parser.add_argument("-e", "--expdefs", action="store", type=str, default=None,
+                        dest="expdefs", help="Experiment definitions.")
+    parser.add_argument("-c", "--cache", action="store", dest="cache", default=None,
+                        help="Cache file path.")
+    parser.add_argument("-o", "--outdir", action="store", type=str,
+                        dest="out", help="Output figure directory.")
+    parser.add_argument("files", nargs='*')
     sys.exit(main(parser.parse_args()))
