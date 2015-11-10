@@ -48,10 +48,10 @@ def main(args):
         meta = cache['metadata']
         cache.close()
         if args.expdefs is None:
-            print "Experiment definitions required."
-            return 1
-        with open(args.expdefs, 'rb') as f:
-            expdefs = pik.load(f)
+            expdefs = {None: list(ac.columns)}
+        else:
+            with open(args.expdefs, 'rb') as f:
+                expdefs = pik.load(f)
     else:
         print "Specify at least one data source."
         return 1
