@@ -194,12 +194,15 @@ def parse_fastq_file(fastq, counts, others):
     for r in records:
         index = r.description[-6:]
         putative = str(r.seq[0:18])
-        if putative in counts[index]:
-            counts[index][putative] += 1
-            # r.letter_annotations['phred_quality']
+        if index in counts:
+            if putative in counts[index]:
+                counts[index][putative] += 1
+                # r.letter_annotations['phred_quality']
+            else:
+                others[index][putative] += 1
+                # r.letter_annotations['phred_quality']
         else:
             others[index][putative] += 1
-            # r.letter_annotations['phred_quality']
     f.close()
 
 
