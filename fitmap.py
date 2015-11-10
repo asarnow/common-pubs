@@ -36,7 +36,7 @@ def main(args):
                 expdefs = pik.load(f)
             meta, ac, oc = process_fastq_files(args, [v[0] for v in [expdefs[k] for k in expdefs]])
         if args.cache is not None:  # Use cache to store parsed data.
-            store = pytables.HDFStore(args.out)
+            store = pytables.HDFStore(args.cache)
             store['metadata'] = meta
             store['allele_counts'] = ac
             store['other_counts'] = oc
