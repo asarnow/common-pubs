@@ -136,8 +136,13 @@ def compute_fitness(args, data, expdefs):
     fitness = {k: [] for k in expdefs}
     for k in expdefs:
         cols = [t[0] for t in expdefs[k]]
+        if len(expdefs[k][0]) > 2:
+            xvals = [t[1] for t in expdefs[k]]
+            poolargs = [data[cols].values, xvals]
+        else:
+            poolargs = data[cols].values
         pool = Pool(processes=args.numproc)
-        result = pool.map(linregress_wrapper, data[cols].values)
+        result = pool.map(linregress_wrapper, poolargs)
         fitness[k] = pd.DataFrame(data=result, index=data.index, columns=['slope', 'intercept', 'r', 'p', 'stderr'])
         pool.close()
     return fitness
