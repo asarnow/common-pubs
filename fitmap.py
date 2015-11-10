@@ -34,7 +34,7 @@ def main(args):
                 return 1
             with open(args.expdefs, 'rb') as f:
                 expdefs = pik.load(f)
-            ac, oc, meta = process_fastq_files(args, [v[0] for v in [expdefs[k] for k in expdefs]])
+            ac, oc, meta = process_fastq_files(args, [v[0][0] for v in expdefs.values()])
         if args.cache is not None:  # Use cache to store parsed data.
             store = pytables.HDFStore(args.cache)
             store['metadata'] = meta
