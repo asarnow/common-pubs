@@ -63,7 +63,7 @@ def main(args):
         if 'fitness' in cache and not args.recompute:  # Load cached fitness data.
             fitness = cache['fitness']
         else:  # Recompute and cache fitness data.
-            fitness = compute_fitness(args, data, expdefs)
+            fitness = pd.Panel(compute_fitness(args, data, expdefs))
             cache['fitness'] = fitness
         cache.close()
     else:  # Compute fitness data on-the-fly.
