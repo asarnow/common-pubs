@@ -48,7 +48,7 @@ def main(args):
         meta = cache['metadata']
         cache.close()
         if args.expdefs is None:
-            expdefs = {None: list(ac.columns)}
+            expdefs = {None: (c,) for c in list(ac.columns)}
         else:
             with open(args.expdefs, 'rb') as f:
                 expdefs = pik.load(f)
