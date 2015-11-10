@@ -50,8 +50,8 @@ def main(args):
     pos = list(set(meta['Pos']) - {None, np.nan, 0})
     aamap = compute_hmap(df[args.score], pos, aa, 'Pos', 'AA', idx, np.nanmedian)
     codmap = compute_hmap(df[args.score], pos, cod, 'Pos', 'Codon', idx, np.nanmedian)
-    draw_hmap(aamap, meta, os.path.join(args.files[1], 'aamap.png'))
-    draw_hmap(codmap, meta, os.path.join(args.files[1], 'codonmap.png'))
+    draw_hmap(aamap, aa, os.path.join(args.files[1], 'aamap.png'))
+    draw_hmap(codmap, cod, os.path.join(args.files[1], 'codonmap.png'))
     return 0
 
 
