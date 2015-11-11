@@ -4,3 +4,4 @@ import sys
 
 store = pytables.HDFStore(sys.argv[1])
 print store
+store.close()
