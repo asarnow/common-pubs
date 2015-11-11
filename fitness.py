@@ -31,7 +31,7 @@ def main(args):
         expdefs = pik.load(f)
 
     fitness = compute_fitness(vswt, expdefs, args.numproc)
-    fitness.to_hdf(args.ouput[0], key="fitness", mode='w', complevel=9)
+    fitness.to_hdf(args.output[0], key="fitness", mode='w', complevel=9)
     return 0
 
 
