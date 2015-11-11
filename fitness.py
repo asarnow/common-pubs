@@ -20,7 +20,7 @@ def main(args):
     # idx = meta.reset_index().set_index(['Pos', 'AA', 'Codon'])
 
     # Read Tamas-brand counts data and pivot.
-    grouped_counts = pd.read_hdf(args.input, key='grouped_data')
+    grouped_counts = pd.read_hdf(args.input[0], key='grouped_data')
     grouped_counts.reset_index(inplace=True)
     counts = grouped_counts.pivot(index='barcodes', columns='index', values='counts')
     # ac = counts.loc[meta.index]
@@ -31,7 +31,7 @@ def main(args):
         expdefs = pik.load(f)
 
     fitness = compute_fitness(vswt, expdefs, args.numproc)
-    fitness.to_hdf(args.ouput, key="fitness", mode='w', complevel=9)
+    fitness.to_hdf(args.ouput[0], key="fitness", mode='w', complevel=9)
     return 0
 
 
