@@ -20,7 +20,7 @@ def main(args):
     # idx = meta.reset_index().set_index(['Pos', 'AA', 'Codon'])
 
     # Read Tamas-brand counts data and pivot.
-    grouped_counts = pd.read_hdf(args.counts, key='grouped_data')
+    grouped_counts = pd.read_hdf(args.files[0], key='grouped_data')
     grouped_counts.reset_index(inplace=True)
     counts = grouped_counts.pivot(index='barcodes', columns='index', values='counts')
     # ac = counts.loc[meta.index]
