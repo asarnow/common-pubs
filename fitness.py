@@ -1,38 +1,85 @@
 #!/usr/bin/env python2.7
+from __future__ import print_function
 import sys
+import os.path
 from multiprocessing import Pool
 import cPickle as pik
 from Bio import Seq
 import numpy as np
 from scipy import stats
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
 def main(args):
     if args.bardefs is None:
-        print "Must specify allele dictionary!"
-        return 1
-    if args.expdefs is None:
-        print "Must specify experiment definitions!"
+        print("Must specify allele dictionary!")
         return 1
 
     meta = parse_library(args.bardefs)
-    # idx = meta.reset_index().set_index(['Pos', 'AA', 'Codon'])
 
-    # Read Tamas-brand counts data and pivot.
-    grouped_counts = pd.read_hdf(args.input[0], key='grouped_data')
-    grouped_counts.reset_index(inplace=True)
-    counts = grouped_counts.pivot(index='barcodes', columns='index', values='counts')
-    # ac = counts.loc[meta.index]
-    # oc = counts.drop(meta.index, errors='ignore')  # Unexpected barcodes.
-    vswt = cnt2fit(counts, meta)
+    try:  # Read Tamas-brand counts data and pivot.
+        grouped_counts = pd.read_hdf(args.input[0], key='grouped_data')
+        grouped_counts.reset_index(inplace=True)
+        counts = grouped_counts.pivot(index='barcodes', columns='index', values='counts')
+        # ac = counts.loc[meta.index]
+        # oc = counts.drop(meta.index, errors='ignore')  # Unexpected barcodes.
+        vswt = cnt2fit(counts, meta)
+        if args.expdefs is None:
+            print("Must specify experiment definitions!")
+            return 1
+        with open(args.expdefs, 'rb') as f:
+            expdefs = pik.load(f)
+        fitness = compute_fitness(vswt, expdefs, args.numproc)
+        if not os.path.isdir(args.output[0]):
+            fitness.to_hdf(args.output[0], key="fitness", mode='w', complevel=9)
+            return 0
+    except KeyError:
+        try:  # Read previously computed fitness data.
+            fitness = pd.read_hdf(args.input[0], key='fitness')
+        except KeyError:
+            print("No known HDF5 key found.")
+            return 1
 
-    with open(args.expdefs, 'rb') as f:
-        expdefs = pik.load(f)
+    if not os.path.isdir(args.output[0]):
+        print("Output path is not a directory.")
+        return 1
 
-    fitness = compute_fitness(vswt, expdefs, args.numproc)
-    fitness.to_hdf(args.output[0], key="fitness", mode='w', complevel=9)
+    idx = meta.reset_index().set_index(['Pos', 'AA', 'Codon'])
+
+    aa = list(set(meta['AA']) - {None, np.nan})
+    cod = list(set(meta['Codon']) - {None, np.nan})
+    pos = list(set(meta['Pos']) - {None, np.nan, 0})
+    aamap = compute_hmap(fitness[args.exp][args.score], pos, aa, 'Pos', 'AA', idx, np.nanmedian)
+    codmap = compute_hmap(fitness[args.exp][args.score], pos, cod, 'Pos', 'Codon', idx, np.nanmedian)
+    draw_hmap(aamap, aa, os.path.join(args.output[0], args.prefix + 'heatmap_aa.png'))
+    draw_hmap(codmap, cod, os.path.join(args.output[0], args.prefix + 'heatmap_codon.png'))
+
     return 0
+
+
+def draw_hmap(hmap, yvals, fname):
+    fig = plt.figure()
+    plt.pcolor(hmap, cmap='RdBu')
+    plt.xlim(0, hmap.shape[1])
+    plt.ylim(0, hmap.shape[0])
+    ax = plt.gca()
+    fig.set_facecolor('white')
+    ax.set_yticks([x+0.6 for x in xrange(0, hmap.shape[0])])
+    ax.set_yticklabels(yvals)
+    ax.set_ylabel('Residue')
+    ax.set_xlabel('Ub Sequence Position')
+    cb = plt.colorbar()
+    cb.set_label('Relative Fitness')
+    plt.savefig(fname, bbox_inches='tight')
+
+
+def compute_hmap(fitness, xvals, yvals, xcol, ycol, idx, avgfun=np.nanmean):
+    aamap = np.zeros((len(yvals), len(xvals)))
+    for i in xrange(0, len(yvals)):
+        for p in xrange(0, len(xvals)):
+            aamap[i, p] = avgfun(fitness.loc[idx.xs([xvals[p], yvals[i]], level=[xcol, ycol])['Seq']])
+    return aamap
 
 
 def cnt2fit(counts, meta):
@@ -94,6 +141,10 @@ if __name__ == "__main__":
                         dest="expdefs", help="Experiment definitions.")
     parser.add_argument("-e", "--experiment", action="store", type=str, default=None,
                         dest="exp", metavar="EXPNAME", help="Experiment label.")
+    parser.add_argument("-s", "--score", action="store", dest="score", type=str,
+                        default='slope', metavar="SCORE", help="Fitness score label (e.g. 'slope').")
+    parser.add_argument("--prefix", action="store", type=str, default="",
+                        metavar="PREFIX", help="Prefix for output figure files.")
     parser.add_argument("input", nargs=1, metavar="COUNTS")
     parser.add_argument("output", nargs=1, metavar="FITNESS")
     sys.exit(main(parser.parse_args()))
