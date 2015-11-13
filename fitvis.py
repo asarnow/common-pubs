@@ -19,14 +19,8 @@ from pandas.io import pytables
 
 
 def main(args):
-    if args.counts and args.scores is not None:
-        print "Scores and counts are mutually exclusive!"
-        return 1
-    if args.counts:
-        print "Not implemented, my bad."
-        return 1
-    if len(args.files) < 1 or len(args.files) > 2:
-        print "Usage: fitmap.py <input> <output_dir>."
+    if args.counts is not None and args.expdefs is None:
+        print "Counts requires experiment defintions!"
         return 1
     if args.dbfile is None:
         print "Must specify allele dictionary!"
@@ -35,23 +29,33 @@ def main(args):
     meta = parse_library(args.dbfile)
     idx = meta.reset_index().set_index(['Pos', 'AA', 'Codon'])
 
-    data = pik.load(open(args.files[0], 'rb'))
-    if type(data) is dict:
-        df = pd.DataFrame.from_dict(data, orient="columns")
-    elif type(data) is pd.DataFrame:
-        df = data
+    if args.counts:  # Read Tamas-brand counts data and pivot.
+        grouped_counts = pd.read_hdf(args.counts, key='grouped_data')
+        grouped_counts.reset_index(inplace=True)
+        counts = grouped_counts.pivot(index='barcodes', columns='index', values='counts')
+        ac = counts.loc[meta.index]
+        #oc = counts.drop(meta.index, errors='ignore')  # Unexpected barcodes.
+        vswt = cnt2fit(ac, meta)
+        with open(args.expdefs, 'rb') as f:
+            expdefs = pik.load(f)
+        data = compute_fitness(vswt, expdefs, args.numproc)
     else:
-        print "Input data must be dict of dict or DataFrame!"
-        return 1
+        inp = pik.load(open(args.files[0], 'rb'))
+        if type(inp) is dict:
+            data = pd.DataFrame.from_dict(inp, orient="columns")
+        elif type(inp) is pd.DataFrame:
+            data = inp
+        else:
+            print "Input data must be dict of dict or DataFrame!"
+            return 1
 
-    df.index.rename('Seq', inplace=True)
     aa = list(set(meta['AA']) - {None, np.nan})
     cod = list(set(meta['Codon']) - {None, np.nan})
     pos = list(set(meta['Pos']) - {None, np.nan, 0})
-    aamap = compute_hmap(df[args.score], pos, aa, 'Pos', 'AA', idx, np.nanmedian)
-    codmap = compute_hmap(df[args.score], pos, cod, 'Pos', 'Codon', idx, np.nanmedian)
-    draw_hmap(aamap, aa, os.path.join(args.files[1], 'aamap.png'))
-    draw_hmap(codmap, cod, os.path.join(args.files[1], 'codonmap.png'))
+    aamap = compute_hmap(data[args.exp][args.score], pos, aa, 'Pos', 'AA', idx, np.nanmedian)
+    codmap = compute_hmap(data[args.exp][args.score], pos, cod, 'Pos', 'Codon', idx, np.nanmedian)
+    draw_hmap(aamap, aa, os.path.join(args.files[0], args.prefix + 'heatmap_aa.png'))
+    draw_hmap(codmap, cod, os.path.join(args.files[0], args.prefix + 'heatmap_codon.png'))
     return 0
 
 
@@ -79,6 +83,33 @@ def compute_hmap(fitness, xvals, yvals, xcol, ycol, idx, avgfun=np.nanmean):
     return aamap
 
 
+def cnt2fit(ac, meta):
+    wt = ac[meta['Pos'] == 0]
+    vswt = np.log2(ac / np.sum(wt))
+    return vswt
+
+
+def compute_fitness(data, expdefs, numproc=1):
+    fitness = {k: [] for k in expdefs}
+    for k in expdefs:
+        cols = [t[0] for t in expdefs[k]]
+        if len(expdefs[k][0]) > 2:
+            xvals = [t[1] for t in expdefs[k]]
+            poolargs = [data[cols].values, xvals]
+        else:
+            poolargs = data[cols].values
+        pool = Pool(processes=numproc)
+        result = pool.map(linregress_wrapper, poolargs)
+        fitness[k] = pd.DataFrame(data=result, index=data.index, columns=['slope', 'intercept', 'r', 'p', 'stderr'])
+        pool.close()
+    return fitness
+
+
+def linregress_wrapper(y, x=np.array([0, 1.87, 3.82])):
+    slope, intercept, rval, pval, err = stats.linregress(x=x, y=y)
+    return slope, intercept, rval, pval, err
+
+
 def parse_library(dbfile):
     library = pik.load(open(dbfile, 'rb'))
     allele = {}
@@ -101,11 +132,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("Map read sequences to known barcodes.")
     parser.add_argument("-p", "--processes", action="store", type=int, default=1,
                         dest="numproc", help="Number of parallel processes.")
-    parser.add_argument("-d", "--database", action="store", type=str,
-                        default=None, dest="dbfile", help="Barcode definitions (allele dictionary).")
-    parser.add_argument("-c", "--counts", action="store_true", dest="counts", default=False,
-                        help="Input data contains sequence counts.")
-    parser.add_argument("-s", "--score", action="store", dest="score", type=str, default='slope',
-                        metavar="SCORE", help="Fitness score label (e.g. 'slope').")
-    parser.add_argument("files", nargs="+")
+    parser.add_argument("-b", "--bardefs", action="store", type=str, default=None,
+                        dest="dbfile", help="Barcode definitions (allele dictionary).")
+    parser.add_argument("-d", "--expdefs", action="store", type=str, default=None,
+                        dest="expdefs", help="Experiment definitions.")
+    parser.add_argument("-c", "--counts", action="store", dest="counts", type=str, default=None,
+                        metavar="FILE", help="Raw counts data from demultiplex.py.")
+    parser.add_argument("-e", "--experiment", action="store", type=str, default="shmooR1",
+                        dest="exp", metavar="EXPNAME", help="Experiment label.")
+    parser.add_argument("-s", "--score", action="store", dest="score", type=str,
+                        default='slope', metavar="SCORE", help="Fitness score label (e.g. 'slope').")
+    parser.add_argument("--prefix", action="store", type=str, default="",
+                        metavar="PREFIX", help="Prefix for output figure files.")
+    parser.add_argument("files", nargs=1)
     sys.exit(main(parser.parse_args()))
