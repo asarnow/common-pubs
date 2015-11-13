@@ -24,14 +24,18 @@ def main(args):
         counts = grouped_counts.pivot(index='barcodes', columns='index', values='counts')
         # ac = counts.loc[meta.index]
         # oc = counts.drop(meta.index, errors='ignore')  # Unexpected barcodes.
-        vswt = cnt2fit(counts, meta)
+        vswt = cnt2pop(counts, meta)  # Convert counts to relative population measure.
+
         if args.expdefs is None:
             print("Must specify experiment definitions!")
             return 1
         with open(args.expdefs, 'rb') as f:
             expdefs = pik.load(f)
+
+        # Compute fitness scores for all experiments.
         fitness = compute_fitness(vswt, expdefs, args.numproc)
-        if not os.path.isdir(args.output[0]):
+
+        if not os.path.isdir(args.output[0]):  # No figure directory, save fitness scores.
             fitness.to_hdf(args.output[0], key="fitness", mode='w', complevel=9)
             return 0
     except KeyError:
@@ -41,17 +45,19 @@ def main(args):
             print("No known HDF5 key found.")
             return 1
 
-    if not os.path.isdir(args.output[0]):
+    if not os.path.isdir(args.output[0]):  # Make sure we have a figure output directory.
         print("Output path is not a directory.")
         return 1
 
-    idx = meta.reset_index().set_index(['Pos', 'AA', 'Codon'])
-
-    aa = list(set(meta['AA']) - {None, np.nan})
-    cod = list(set(meta['Codon']) - {None, np.nan})
-    pos = list(set(meta['Pos']) - {None, np.nan, 0})
+    # Variables needed for plotting.
+    idx = meta.reset_index().set_index(['Pos', 'AA', 'Codon'])  # Metadata index.
+    aa = list(set(meta['AA']) - {None, np.nan})  # Unique amino acids.
+    cod = list(set(meta['Codon']) - {None, np.nan})  # Unique codons.
+    pos = list(set(meta['Pos']) - {None, np.nan, 0})  # Unique Ub positions.
+    # Computing the heat maps using the metadata index.
     aamap = compute_hmap(fitness[args.exp][args.score], pos, aa, 'Pos', 'AA', idx, np.nanmedian)
     codmap = compute_hmap(fitness[args.exp][args.score], pos, cod, 'Pos', 'Codon', idx, np.nanmedian)
+    # Plot heat maps and write image files.
     draw_hmap(aamap, aa, os.path.join(args.output[0], args.prefix + 'heatmap_aa.png'))
     draw_hmap(codmap, cod, os.path.join(args.output[0], args.prefix + 'heatmap_codon.png'))
 
@@ -59,6 +65,12 @@ def main(args):
 
 
 def draw_hmap(hmap, yvals, fname):
+    """
+    Plot a matrix as a heat map and write an image file.
+    :param hmap: Heat map matrix.
+    :param yvals: Heat map Y labels (e.g. amino acid names).
+    :param fname: Destination image file.
+    """
     fig = plt.figure()
     plt.pcolor(hmap, cmap='RdBu')
     plt.xlim(0, hmap.shape[1])
@@ -75,6 +87,17 @@ def draw_hmap(hmap, yvals, fname):
 
 
 def compute_hmap(fitness, xvals, yvals, xcol, ycol, idx, avgfun=np.nanmean):
+    """
+    Use the metadata index to efficiently populate fitness heat map.
+    :param fitness: DataFrame containing fitness scores (per barcode).
+    :param xvals: List of heat map X values / labels (e.g. Ub positions).
+    :param yvals: List of heat map Y values / labels (e.g. amino acids).
+    :param xcol: Name of X value column in fitness DataFrame.
+    :param ycol: Name of Y value column in fitness DataFrame.
+    :param idx: DataFrame containing indexed metadata.
+    :param avgfun: Aggregation function for grouped barcode data (e.g. with same mutation).
+    :return: Heat map matrix.
+    """
     aamap = np.zeros((len(yvals), len(xvals)))
     for i in xrange(0, len(yvals)):
         for p in xrange(0, len(xvals)):
@@ -82,16 +105,30 @@ def compute_hmap(fitness, xvals, yvals, xcol, ycol, idx, avgfun=np.nanmean):
     return aamap
 
 
-def cnt2fit(counts, meta):
+def cnt2pop(counts, meta):
+    """
+    Convert from raw barcode sequence counts to relative population measure.
+    :param counts: DataFrame containing counts data.
+    :param meta: DataFrame containing barcode metadata.
+    :return: Relative population measure for non-wild-type barcodes.
+    """
     ac = counts.loc[meta.index]
     ac[ac == 0] = 0.5
     ac[np.isnan(ac)] = 0.5
-    wt = ac[meta['Pos'] == 0]
+    wt = ac[meta['Pos'] == 0]  # All true wild-type Ub nucleotide sequences.
     vswt = np.log2(ac / np.sum(wt))
     return vswt
 
 
 def compute_fitness(data, expdefs, numproc=1):
+    """
+    Compute fitness scores with barcode-level parallelism.
+    Currently uses linear regression of relative population values.
+    :param data: DataFrame containing relative population data.
+    :param expdefs: Dictionary defining experiment names, TrueSeq indices and time points.
+    :param numproc: Number of parallel processes in process pool.
+    :return: Panel containing fitness computation results for each experiment.
+    """
     fitness = {k: [] for k in expdefs}
     for k in expdefs:
         cols = [t[0] for t in expdefs[k]]
@@ -109,11 +146,22 @@ def compute_fitness(data, expdefs, numproc=1):
 
 
 def linregress_wrapper(y, x=np.array([0, 1.87, 3.82])):
+    """
+    Wrapper function allowing stats.linregress to be used with multiprocessing.Pool.
+    :param y: Vector of relative population measure (dependent variable).
+    :param x: Vector of time points (independent variable).
+    :return: Tuple containing fields of LinearRegressionResult.
+    """
     slope, intercept, rval, pval, err = stats.linregress(x=x, y=y)
     return slope, intercept, rval, pval, err
 
 
 def parse_library(dbfile):
+    """
+    Read barcode allele dictionary and convert to DataFrame containing barcode metadata.
+    :param dbfile: Pickle file holding barcode allele dictionary.
+    :return: DataFrame containing barcode metadata.
+    """
     library = pik.load(open(dbfile, 'rb'))
     allele = {}
     for k in library:
