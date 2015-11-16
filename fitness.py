@@ -55,12 +55,20 @@ def main(args):
     cod = list(set(meta['Codon']) - {None, np.nan})  # Unique codons.
     pos = list(set(meta['Pos']) - {None, np.nan, 0})  # Unique Ub positions.
     # Computing the heat maps using the metadata index.
+    # TODO Loop over experiments.
+    # TODO Compute std heat maps.
+    # TODO Sorted list of positions by: mean, max, std, min, isnan of mean/med/etc. maps.
+    # TODO Where isnan set in all experiments.
+    # TODO Subtract control values and repeat analysis.
+    # TODO Exclude non-surface residues and repeat.
+    # TODO Group residues by type and repeat.
     aamap = compute_hmap(fitness[args.exp][args.score], pos, aa, 'Pos', 'AA', idx, np.nanmedian)
     codmap = compute_hmap(fitness[args.exp][args.score], pos, cod, 'Pos', 'Codon', idx, np.nanmedian)
     # Plot heat maps and write image files.
     draw_hmap(aamap, aa, os.path.join(args.output[0], args.prefix + 'heatmap_aa.png'))
     draw_hmap(codmap, cod, os.path.join(args.output[0], args.prefix + 'heatmap_codon.png'))
-
+    # TODO process all exps with replicates.
+    # TODO Compute corr coef, difference heat maps.
     return 0
 
 
