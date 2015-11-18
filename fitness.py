@@ -62,6 +62,7 @@ def main(args):
     # TODO Subtract control values and repeat analysis.
     # TODO Exclude non-surface residues and repeat.
     # TODO Group residues by type and repeat.
+    # mask = fitness[args.exp]['stderr'] < 0.05
     aamap = compute_hmap(fitness[args.exp][args.score], pos, aa, 'Pos', 'AA', idx, np.nanmedian)
     codmap = compute_hmap(fitness[args.exp][args.score], pos, cod, 'Pos', 'Codon', idx, np.nanmedian)
     # Plot heat maps and write image files.
@@ -79,14 +80,25 @@ def draw_hmap(hmap, yvals, fname):
     :param yvals: Heat map Y labels (e.g. amino acid names).
     :param fname: Destination image file.
     """
+    if np.nanmax(hmap) > abs(np.nanmin(hmap)):
+        vmax = np.nanmax(hmap)
+        vmin = -np.nanmax(hmap)
+    else:
+        vmax = abs(np.nanmin(hmap))
+        vmin = np.nanmin(hmap)
     fig = plt.figure()
-    plt.pcolor(hmap, cmap='RdBu')
+    plt.figure(figsize=(20,10))
+    plt.imshow(hmap, cmap='RdBu', interpolation = 'nearest',aspect='auto',vmin = vmin ,vmax = vmax )
     plt.xlim(0, hmap.shape[1])
     plt.ylim(0, hmap.shape[0])
     ax = plt.gca()
     fig.set_facecolor('white')
-    ax.set_yticks([x+0.6 for x in xrange(0, hmap.shape[0])])
+    ax.set_xlim((-0.5, hmap.shape[1] -0.5))
+    ax.set_ylim((-0.5, hmap.shape[0] -0.5))
+    ax.set_yticks([x for x in xrange(0, hmap.shape[0])])
     ax.set_yticklabels(yvals)
+    ax.set_xticks(range(0,76,5))
+    ax.set_xticklabels(range(2,76,5)+['STOP'])
     ax.set_ylabel('Residue')
     ax.set_xlabel('Ub Sequence Position')
     cb = plt.colorbar()
