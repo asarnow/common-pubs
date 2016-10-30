@@ -67,7 +67,37 @@ def main(args):
                 fitdat.to_hdf(args.output[0], key="fitness", mode='w', complevel=9)
             return 0
     except KeyError:
-        print("No known HDF5 key found.")
+        try:  # Read previously computed fitness data.
+            fitness = pd.read_hdf(args.input[0], key='fitness')
+        except KeyError:
+            print("No known HDF5 key found.")
+            return 1
+
+    if not os.path.isdir(args.output[0]):  # Make sure we have a figure output directory.
+        print("Output path is not a directory.")
+        return 1
+
+    # Variables needed for plotting.
+    idx = meta.reset_index().set_index(['Pos', 'AA', 'Codon'])  # Metadata index.
+    aa = list(set(meta['AA']) - {None, np.nan})  # Unique amino acids.
+    cod = list(set(meta['Codon']) - {None, np.nan})  # Unique codons.
+    pos = list(set(meta['Pos']) - {None, np.nan, 0})  # Unique Ub positions.
+    # Computing the heat maps using the metadata index.
+    # TODO Loop over experiments.
+    # TODO Compute std heat maps.
+    # TODO Sorted list of positions by: mean, max, std, min, isnan of mean/med/etc. maps.
+    # TODO Where isnan set in all experiments.
+    # TODO Subtract control values and repeat analysis.
+    # TODO Exclude non-surface residues and repeat.
+    # TODO Group residues by type and repeat.
+    # mask = fitness[args.exp]['stderr'] < 0.05
+    aamap = compute_hmap(fitness[args.exp][args.score], pos, aa, 'Pos', 'AA', idx, np.nanmedian)
+    codmap = compute_hmap(fitness[args.exp][args.score], pos, cod, 'Pos', 'Codon', idx, np.nanmedian)
+    # Plot heat maps and write image files.
+    draw_hmap(aamap, aa, os.path.join(args.output[0], args.prefix + 'heatmap_aa.png'))
+    draw_hmap(codmap, cod, os.path.join(args.output[0], args.prefix + 'heatmap_codon.png'))
+    # TODO process all exps with replicates.
+    # TODO Compute corr coef, difference heat maps.
     return 0
 
 
@@ -78,22 +108,25 @@ def draw_hmap_old(hmap, yvals, fname=None):
     :param yvals: Heat map Y labels (e.g. amino acid names).
     :param fname: Destination image file.
     """
+    if np.nanmax(hmap) > abs(np.nanmin(hmap)):
+        vmax = np.nanmax(hmap)
+        vmin = -np.nanmax(hmap)
+    else:
+        vmax = abs(np.nanmin(hmap))
+        vmin = np.nanmin(hmap)
     fig = plt.figure()
-    cm = plt.get_cmap('RdBu')
-    cm.set_bad(color='k', alpha=1.)
-    # cm.set_under(color='orange', alpha=1.)
-    # cm.set_over(color='purple', alpha=1.)
-    # vmin = np.nanmean(hmap) - 2 * np.nanstd(hmap)
-    # vmax = np.nanmean(hmap) + 2 * np.nanstd(hmap)
-    vmin = np.nanmin(hmap)
-    vmax = np.nanmax(hmap)
-    plt.pcolor(hmap, cmap=cm, vmin=vmin, vmax=vmax)
+    plt.figure(figsize=(20,10))
+    plt.imshow(hmap, cmap='RdBu', interpolation = 'nearest',aspect='auto',vmin = vmin ,vmax = vmax )
     plt.xlim(0, hmap.shape[1])
     plt.ylim(0, hmap.shape[0])
     ax = plt.gca()
     fig.set_facecolor('white')
-    ax.set_yticks([x + 0.6 for x in xrange(0, hmap.shape[0])])
+    ax.set_xlim((-0.5, hmap.shape[1] -0.5))
+    ax.set_ylim((-0.5, hmap.shape[0] -0.5))
+    ax.set_yticks([x for x in xrange(0, hmap.shape[0])])
     ax.set_yticklabels(yvals)
+    ax.set_xticks(range(0,76,5))
+    ax.set_xticklabels(range(2,76,5)+['STOP'])
     ax.set_ylabel('Residue')
     ax.set_xlabel('Ub Sequence Position')
     cb = plt.colorbar()
