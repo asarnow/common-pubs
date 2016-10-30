@@ -29,7 +29,7 @@ def main(args):
 def hamming_bnb_search(barcode, seqDict, seqDictCorrected, maxdist):
         minDist = maxdist
         best = None
-        for seq in seqDict.keys():
+        for seq in seqDict:
             currDist = 0
             for a, b in zip(str(seq), barcode):
                 currDist += (a != b)
